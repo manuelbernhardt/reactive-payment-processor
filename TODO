@@ -1,2 +1,7 @@
+- tests for rejected orders
+- README file
+- benchmark / timing tests (see the akka benchmark tests for this)
+
+improvements
 - system must known beforehand if node is available to handle order, with correct bank
 -
