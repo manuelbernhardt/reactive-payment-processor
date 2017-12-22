@@ -12,7 +12,12 @@ class Validator extends Actor with ActorLogging {
         sender() ! OrderRejected(id, order)
       } else {
         // compute fake bank identifier from merchant account - this usually would be done via merchant configuration
-        val bankIdentifier = if (order.account.a.hashCode % 2 == 0) PaymentProcessor.BankA else PaymentProcessor.BankB
+        val bankIdentifier = order.account match {
+          case PaymentProcessor.MerchantAccountA => PaymentProcessor.BankA
+          case PaymentProcessor.MerchantAccountB => PaymentProcessor.BankB
+          case PaymentProcessor.MerchantAccountC => PaymentProcessor.BankC
+          case _ => PaymentProcessor.BankA
+        }
         sender() ! OrderValidated(id, order, bankIdentifier)
       }
   }

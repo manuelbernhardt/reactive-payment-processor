@@ -75,10 +75,14 @@ object PaymentProcessor {
   case class OrderFailed(id: Option[OrderIdentifier]) extends OrderResult
 
   case class MerchantAccount(a: String) extends AnyVal
+  val MerchantAccountA = MerchantAccount("A")
+  val MerchantAccountB = MerchantAccount("B")
+  val MerchantAccountC = MerchantAccount("C")
 
   case class BankIdentifier(b: String) extends AnyVal
   val BankA = BankIdentifier("A")
   val BankB = BankIdentifier("B")
+  val BankC = BankIdentifier("C")
 
   case class OrderIdentifier(i: UUID) extends AnyVal
   object OrderIdentifier {

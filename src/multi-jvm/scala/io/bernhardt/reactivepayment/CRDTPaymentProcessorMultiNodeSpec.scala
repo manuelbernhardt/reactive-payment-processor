@@ -55,7 +55,7 @@ class CRDTPaymentProcessorMultiNode extends MultiNodeSpec(CRDTPaymentMultiNodeCo
 
     "be able to process a valid order" in within(15.seconds) {
       runOn(node3) {
-        val order = Order(MerchantAccount("a"), BigDecimal(10.00), EUR, "Test node 1")
+        val order = Order(PaymentProcessor.MerchantAccountA, BigDecimal(10.00), EUR, "Test node 1")
         processor.get.processPayment(order).futureValue mustBe an[OrderSucceeded]
       }
 
