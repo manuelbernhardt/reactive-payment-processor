@@ -14,9 +14,10 @@ import scala.concurrent.duration._
   * that have the required hardware token to communicate with the bank. This mechanism is represented by
   * cluster roles.
   */
-class OrderExecutor extends Actor with ActorLogging {
+class Executor extends Actor with ActorLogging {
 
   val replicator = DistributedData(context.system).replicator
+
   implicit val cluster = Cluster(context.system)
 
   val supportedBanks: Set[String] =
@@ -44,9 +45,7 @@ class OrderExecutor extends Actor with ActorLogging {
       log.info("Successful execution of order {}", id)
       storeExecutionResult(id, order, OrderStatus.Executed)
     case Replicator.UpdateSuccess(Key, Some(id: OrderIdentifier)) =>
-      // happy
-
-    // TODO handle storage failures
+      log.info("Order {} updated successfully", id)
   }
 
   private def executeOrders(groupedOrders: Map[BankIdentifier, Iterable[StoredOrder]]): Unit = {
@@ -78,8 +77,8 @@ class OrderExecutor extends Actor with ActorLogging {
 
 }
 
-object OrderExecutor {
+object Executor {
 
-  def props() = Props(new OrderExecutor)
+  def props() = Props(new Executor)
 
 }

@@ -23,13 +23,13 @@ trait PaymentProcessor {
 
 }
 
-case class CRDTPaymentProcessor(system: ActorSystem)(implicit ec: ExecutionContext) extends PaymentProcessor {
+case class ReactivePaymentProcessor(system: ActorSystem)(implicit ec: ExecutionContext) extends PaymentProcessor {
 
-  class ActorProcessor extends Actor with ActorLogging {
+  class ActorPaymentProcessor extends Actor with ActorLogging {
 
     val orderStorage = context.actorOf(OrderStorage.props(), "order-storage")
     val validator = context.actorOf(Validator.props())
-    val executor = context.actorOf(OrderExecutor.props())
+    val executor = context.actorOf(Executor.props())
     val client = context.actorOf(Client.props(orderStorage, validator))
 
     def receive = {
@@ -39,21 +39,21 @@ case class CRDTPaymentProcessor(system: ActorSystem)(implicit ec: ExecutionConte
     }
   }
 
-  object ActorProcessor {
-    def props() = Props(new ActorProcessor)
+  object ActorPaymentProcessor {
+    def props() = Props(new ActorPaymentProcessor)
   }
 
-  val processor = system.actorOf(ActorProcessor.props(), "processor")
+  val processor = system.actorOf(ActorPaymentProcessor.props(), "processor")
 
 
   override def processPayment(order: Order): Future[OrderResult] = {
     implicit val timeout: Timeout = Timeout(10.seconds)
     (processor ? Client.ProcessOrder(order)).map {
-      case ClientOrderHandler.OrderRejected(id) =>
+      case OrderHandler.OrderRejected(id) =>
         OrderFailed(Some(id))
-      case ClientOrderHandler.OrderExecuted(id) =>
+      case OrderHandler.OrderExecuted(id) =>
         OrderSucceeded(id)
-      case ClientOrderHandler.OrderFailed(id) =>
+      case OrderHandler.OrderFailed(id) =>
         OrderFailed(Some(id))
     } recover {
       case NonFatal(t) =>
@@ -68,7 +68,7 @@ case class CRDTPaymentProcessor(system: ActorSystem)(implicit ec: ExecutionConte
 
 object PaymentProcessor {
 
-  case class Order(account: MerchantAccount, amount: BigDecimal, currency: Currency, usage: String)
+  case class Order(account: MerchantAccount, creditCardToken: CreditCardToken, amount: BigDecimal, currency: Currency, usage: String)
 
   sealed trait OrderResult
   case class OrderSucceeded(id: OrderIdentifier) extends OrderResult
@@ -78,6 +78,8 @@ object PaymentProcessor {
   val MerchantAccountA = MerchantAccount("A")
   val MerchantAccountB = MerchantAccount("B")
   val MerchantAccountC = MerchantAccount("C")
+
+  case class CreditCardToken(t: String) extends AnyVal
 
   case class BankIdentifier(b: String) extends AnyVal
   val BankA = BankIdentifier("A")

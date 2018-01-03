@@ -8,7 +8,7 @@ class Client(orderStorage: ActorRef, validator: ActorRef) extends Actor with Act
 
   def receive: Receive = {
     case ProcessOrder(order) =>
-      context.actorOf(ClientOrderHandler.props(order, sender(), orderStorage, validator))
+      context.actorOf(OrderHandler.props(order, sender(), orderStorage, validator))
 
   }
 }

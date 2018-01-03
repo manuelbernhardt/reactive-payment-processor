@@ -8,9 +8,9 @@ import io.bernhardt.reactivepayment.PaymentProcessor.{Order, OrderIdentifier}
 /**
   * Handles a single order from a specific client
   */
-class ClientOrderHandler(order: Order, client: ActorRef, orderStorage: ActorRef, validator: ActorRef) extends Actor with ActorLogging {
+class OrderHandler(order: Order, client: ActorRef, orderStorage: ActorRef, validator: ActorRef) extends Actor with ActorLogging {
 
-  import ClientOrderHandler._
+  import OrderHandler._
 
   val replicator = DistributedData(context.system).replicator
   implicit val cluster = Cluster(context.system)
@@ -21,7 +21,6 @@ class ClientOrderHandler(order: Order, client: ActorRef, orderStorage: ActorRef,
 
 
   orderStorage ! OrderStorage.RegisterOrder(orderIdentifier, order, self)
-  // TODO handle failure thereof
 
   log.info("Received new order {}", orderIdentifier)
 
@@ -35,21 +34,24 @@ class ClientOrderHandler(order: Order, client: ActorRef, orderStorage: ActorRef,
     case Validator.OrderRejected(id, order) =>
       log.warning("Order {} failed validation - rejected", orderIdentifier)
       orderStorage ! OrderStorage.StoreOrderRejection(id, order)
+      orderStorage ! OrderStorage.StoreOrderDone(orderIdentifier, order)
       client ! OrderRejected(id)
     case OrderStorage.OrderValidationStored(id, _) =>
       log.info("Order {} validation stored", id)
 
     case change @ Replicator.Changed(OrderStorage.Key) =>
-      val allOrders = change.get(OrderStorage.Key)
-      val order = allOrders.entries.get(orderIdentifier.i.toString)
+      val allOrders = change.get(OrderStorage.Key).entries
+      val order = allOrders.get(orderIdentifier.i.toString)
       order.foreach { order =>
         order.status match {
           case OrderStatus.Executed =>
             client ! OrderExecuted(orderIdentifier)
+            orderStorage ! OrderStorage.StoreOrderDone(orderIdentifier, order.order)
           case OrderStatus.Failed =>
             client ! OrderFailed(orderIdentifier)
+            orderStorage ! OrderStorage.StoreOrderDone(orderIdentifier, order.order)
           case _ =>
-          // we don't care about these
+          // ignore any of these
         }
       }
 
@@ -58,10 +60,10 @@ class ClientOrderHandler(order: Order, client: ActorRef, orderStorage: ActorRef,
 
 }
 
-object ClientOrderHandler {
+object OrderHandler {
 
   def props(order: Order, client: ActorRef, orderStorage: ActorRef, validator: ActorRef): Props =
-    Props(new ClientOrderHandler(order, client, orderStorage, validator))
+    Props(new OrderHandler(order, client, orderStorage, validator))
 
   case class OrderCreated(id: OrderIdentifier)
   case class OrderRejected(id: OrderIdentifier)

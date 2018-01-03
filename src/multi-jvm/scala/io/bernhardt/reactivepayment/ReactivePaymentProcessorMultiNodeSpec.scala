@@ -4,29 +4,29 @@ import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{CurrentClusterState, MemberUp}
 import akka.remote.testkit.{MultiNodeConfig, MultiNodeSpec}
 import com.typesafe.config.ConfigFactory
-import io.bernhardt.reactivepayment.PaymentProcessor.{EUR, MerchantAccount, Order, OrderSucceeded}
+import io.bernhardt.reactivepayment.PaymentProcessor.{CreditCardToken, EUR, Order, OrderSucceeded}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 
-class CRDTPaymentMultiJvmNode1 extends CRDTPaymentProcessorMultiNode
+class ReactivePaymentMultiJvmNode1 extends ReactivePaymentProcessorMultiNode
 
-class CRDTPaymentMultiJvmNode2 extends CRDTPaymentProcessorMultiNode
+class ReactivePaymentMultiJvmNode2 extends ReactivePaymentProcessorMultiNode
 
-class CRDTPaymentMultiJvmNode3 extends CRDTPaymentProcessorMultiNode
+class ReactivePaymentMultiJvmNode3 extends ReactivePaymentProcessorMultiNode
 
-class CRDTPaymentProcessorMultiNode extends MultiNodeSpec(CRDTPaymentMultiNodeConfig) with ScalaTestMultiNodeSpec with ScalaFutures {
+class ReactivePaymentProcessorMultiNode extends MultiNodeSpec(ReactivePaymentMultiNodeConfig) with ScalaTestMultiNodeSpec with ScalaFutures {
 
   override implicit val patienceConfig = PatienceConfig(scaled(Span(15, Seconds)))
 
-  import CRDTPaymentMultiNodeConfig._
+  import ReactivePaymentMultiNodeConfig._
 
   override def initialParticipants = 3
 
 
-  "A CRDT Payment Processor" must {
+  "A Reactive Payment Processor" must {
 
     var processor: Option[PaymentProcessor] = None
 
@@ -36,13 +36,13 @@ class CRDTPaymentProcessorMultiNode extends MultiNodeSpec(CRDTPaymentMultiNodeCo
       Cluster(system) join node(node1).address
 
       runOn(node1) {
-        CRDTPaymentProcessor(system)
+        ReactivePaymentProcessor(system)
       }
       runOn(node2) {
-        CRDTPaymentProcessor(system)
+        ReactivePaymentProcessor(system)
       }
       runOn(node3) {
-       processor = Some(CRDTPaymentProcessor(system))
+       processor = Some(ReactivePaymentProcessor(system))
 
       }
 
@@ -55,7 +55,7 @@ class CRDTPaymentProcessorMultiNode extends MultiNodeSpec(CRDTPaymentMultiNodeCo
 
     "be able to process a valid order" in within(15.seconds) {
       runOn(node3) {
-        val order = Order(PaymentProcessor.MerchantAccountA, BigDecimal(10.00), EUR, "Test node 1")
+        val order = Order(PaymentProcessor.MerchantAccountA, CreditCardToken("token"), BigDecimal(10.00), EUR, "Test node 1")
         processor.get.processPayment(order).futureValue mustBe an[OrderSucceeded]
       }
 
@@ -65,7 +65,7 @@ class CRDTPaymentProcessorMultiNode extends MultiNodeSpec(CRDTPaymentMultiNodeCo
 }
 
 
-object CRDTPaymentMultiNodeConfig extends MultiNodeConfig {
+object ReactivePaymentMultiNodeConfig extends MultiNodeConfig {
   val node1 = role("node1")
   val node2 = role("node2")
   val node3 = role("node3")

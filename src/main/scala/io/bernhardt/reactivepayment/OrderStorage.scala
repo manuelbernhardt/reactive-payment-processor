@@ -7,6 +7,12 @@ import io.bernhardt.reactivepayment.PaymentProcessor.{BankIdentifier, Order, Ord
 
 import scala.concurrent.duration._
 
+/**
+  * Stores orders using Akka's Distributed Data module for master to master replication.
+  * Orders themselves are immutable and only their state as well as some auxiliary validation data can change over time,
+  * which is to say that they can be quite easily represented as custom CRDTs (see [[ io.bernhardt.reactivepayment.StoredOrder ]]
+  * and [[ io.bernhardt.reactivepayment.OrderStatus ]]).
+  */
 class OrderStorage extends Actor with ActorLogging {
 
   import OrderStorage._
@@ -23,19 +29,28 @@ class OrderStorage extends Actor with ActorLogging {
       }
     case Replicator.UpdateSuccess(Key, Some(request: RegisterOrder)) =>
       request.replyTo ! OrderRegistered(request.id, request.order)
-      // TODO handle update failure
 
     case request @ StoreOrderValidation(id, order, bankIdentifier, _) =>
       val storedOrder = StoredOrder(id, OrderStatus.Validated, order, Some(bankIdentifier))
-      replicator ! Replicator.Update(Key, ORMap.empty[String, StoredOrder], Replicator.WriteMajority(5.seconds), Some(request)) { orders =>
+      replicator ! Replicator.Update(
+        key = Key,
+        initial = ORMap.empty[String, StoredOrder],
+        writeConsistency = Replicator.WriteMajority(5.seconds),
+        request = Some(request)
+      ) { orders =>
         orders + (id.i.toString -> storedOrder)
       }
     case Replicator.UpdateSuccess(Key, Some(request: StoreOrderValidation)) =>
       request.replyTo ! OrderValidationStored(request.id, request.order)
-      // TODO handle update failure
 
     case request @ StoreOrderRejection(id, order) =>
       val storedOrder = StoredOrder(id, OrderStatus.Rejected, order, None)
+      replicator ! Replicator.Update(Key, ORMap.empty[String, StoredOrder], Replicator.WriteMajority(5.seconds), Some(request)) { orders =>
+        orders + (id.i.toString -> storedOrder)
+      }
+
+    case request @ StoreOrderDone(id, order) =>
+      val storedOrder = StoredOrder(id, OrderStatus.Done, order, None)
       replicator ! Replicator.Update(Key, ORMap.empty[String, StoredOrder], Replicator.WriteMajority(5.seconds), Some(request)) { orders =>
         orders + (id.i.toString -> storedOrder)
       }
@@ -58,6 +73,8 @@ object OrderStorage {
 
   case class StoreOrderRejection(id: OrderIdentifier, order: Order)
 
+  case class StoreOrderDone(id: OrderIdentifier, order: Order)
+
 }
 
 case class StoredOrder(id: OrderIdentifier, status: OrderStatus, order: Order, bankIdentifier: Option[BankIdentifier]) extends ReplicatedData {
@@ -65,12 +82,11 @@ case class StoredOrder(id: OrderIdentifier, status: OrderStatus, order: Order, b
   type T = StoredOrder
 
   override def merge(that: StoredOrder): StoredOrder = {
-    val bankIdentifier = if (this.bankIdentifier.isDefined) this.bankIdentifier else that.bankIdentifier
+    val bankIdentifier = this.bankIdentifier.orElse(that.bankIdentifier)
     val status = this.status.merge(that.status)
     StoredOrder(this.id, status, this.order, bankIdentifier)
   }
 }
-
 
 case class OrderStatus(name: String)(_predecessors: => Set[OrderStatus], _successors: => Set[OrderStatus]) extends ReplicatedData {
 
@@ -121,7 +137,11 @@ case class OrderStatus(name: String)(_predecessors: => Set[OrderStatus], _succes
   }
 }
 
-
+/**
+  * New ---> Validated ---> Executed -------|
+  *     |              |--> Failed ------ Done
+  *     |--> Rejected ----------------------|
+  */
 object OrderStatus {
   val New: OrderStatus = OrderStatus("new")(Set.empty, Set(Validated, Rejected))
   val Validated: OrderStatus = OrderStatus("validated")(Set(New), Set(Executed, Failed))
