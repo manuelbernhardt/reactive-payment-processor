@@ -1,6 +1,6 @@
 import com.typesafe.sbt.SbtMultiJvm.multiJvmSettings
 
-name := "crdt-payment-processor"
+name := "reactive-payment-processor"
 
 version := "1.0"
 
