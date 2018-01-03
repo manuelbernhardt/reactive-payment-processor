@@ -29,7 +29,7 @@ case class ReactivePaymentProcessor(system: ActorSystem)(implicit ec: ExecutionC
 
     val orderStorage = context.actorOf(OrderStorage.props(), "order-storage")
     val validator = context.actorOf(Validator.props())
-    val executor = context.actorOf(Executor.props())
+    val executor = context.actorOf(Executor.props(orderStorage))
     val client = context.actorOf(Client.props(orderStorage, validator))
 
     def receive = {

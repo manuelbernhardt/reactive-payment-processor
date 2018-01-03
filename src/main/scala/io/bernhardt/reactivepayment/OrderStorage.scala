@@ -20,6 +20,8 @@ class OrderStorage extends Actor with ActorLogging {
   val replicator = DistributedData(context.system).replicator
   implicit val cluster = Cluster(context.system)
 
+  replicator ! Replicator.Subscribe(OrderStorage.Key, self)
+
 
   def receive = {
     case request @ RegisterOrder(id, order, _) =>
@@ -49,13 +51,34 @@ class OrderStorage extends Actor with ActorLogging {
         orders + (id.i.toString -> storedOrder)
       }
 
+    case request @ StoreOrderExecuted(id, order) =>
+      storeExecutionResult(id, order, OrderStatus.Executed, request)
+
+    case request @ StoreOrderFailed(id, order) =>
+      storeExecutionResult(id, order, OrderStatus.Failed, request)
+
     case request @ StoreOrderDone(id, order) =>
       val storedOrder = StoredOrder(id, OrderStatus.Done, order, None)
       replicator ! Replicator.Update(Key, ORMap.empty[String, StoredOrder], Replicator.WriteMajority(5.seconds), Some(request)) { orders =>
         orders + (id.i.toString -> storedOrder)
       }
 
+    case Replicator.UpdateSuccess(Key, Some(request: StorageCommand)) =>
+      log.info("Order {} updated successfully", request.id)
+
+    case change @ Replicator.Changed(OrderStorage.Key) =>
+      val allOrders = change.get(OrderStorage.Key).entries
+      context.system.eventStream.publish(OrderStorage.OrdersChanged(allOrders))
+
   }
+
+  private def storeExecutionResult(id: OrderIdentifier, order: Order, status: OrderStatus, request: Any): Unit = {
+    val storedOrder = StoredOrder(id, status, order, None)
+    replicator ! Replicator.Update(Key, ORMap.empty[String, StoredOrder], Replicator.WriteMajority(5.seconds), Some(request)) { orders =>
+      orders + (id.i.toString -> storedOrder)
+    }
+  }
+
 
 }
 
@@ -65,15 +88,24 @@ object OrderStorage {
 
   val Key = ORMapKey.create[String, StoredOrder]("orders")
 
-  case class RegisterOrder(id: OrderIdentifier, order: Order, replyTo: ActorRef)
+  case class OrdersChanged(orders: Map[String, StoredOrder])
+
+  sealed trait StorageCommand {
+    val id: OrderIdentifier
+  }
+
+  case class RegisterOrder(id: OrderIdentifier, order: Order, replyTo: ActorRef) extends StorageCommand
   case class OrderRegistered(id: OrderIdentifier, order: Order)
 
-  case class StoreOrderValidation(id: OrderIdentifier, order: Order, bankIdentifier: BankIdentifier, replyTo: ActorRef)
+  case class StoreOrderValidation(id: OrderIdentifier, order: Order, bankIdentifier: BankIdentifier, replyTo: ActorRef) extends StorageCommand
   case class OrderValidationStored(id: OrderIdentifier, order: Order)
 
-  case class StoreOrderRejection(id: OrderIdentifier, order: Order)
+  case class StoreOrderRejection(id: OrderIdentifier, order: Order) extends StorageCommand
 
-  case class StoreOrderDone(id: OrderIdentifier, order: Order)
+  case class StoreOrderExecuted(id: OrderIdentifier, order: Order) extends StorageCommand
+  case class StoreOrderFailed(id: OrderIdentifier, order: Order)
+
+  case class StoreOrderDone(id: OrderIdentifier, order: Order) extends StorageCommand
 
 }
 

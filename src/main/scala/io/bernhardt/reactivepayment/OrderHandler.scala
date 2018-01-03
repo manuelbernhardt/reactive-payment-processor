@@ -1,8 +1,6 @@
 package io.bernhardt.reactivepayment
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
-import akka.cluster.Cluster
-import akka.cluster.ddata.{DistributedData, Replicator}
 import io.bernhardt.reactivepayment.PaymentProcessor.{Order, OrderIdentifier}
 
 /**
@@ -12,13 +10,9 @@ class OrderHandler(order: Order, client: ActorRef, orderStorage: ActorRef, valid
 
   import OrderHandler._
 
-  val replicator = DistributedData(context.system).replicator
-  implicit val cluster = Cluster(context.system)
-
-  replicator ! Replicator.Subscribe(OrderStorage.Key, self)
-
   val orderIdentifier = OrderIdentifier.generate
 
+  context.system.eventStream.subscribe(self, classOf[OrderStorage.OrdersChanged])
 
   orderStorage ! OrderStorage.RegisterOrder(orderIdentifier, order, self)
 
@@ -39,9 +33,8 @@ class OrderHandler(order: Order, client: ActorRef, orderStorage: ActorRef, valid
     case OrderStorage.OrderValidationStored(id, _) =>
       log.info("Order {} validation stored", id)
 
-    case change @ Replicator.Changed(OrderStorage.Key) =>
-      val allOrders = change.get(OrderStorage.Key).entries
-      val order = allOrders.get(orderIdentifier.i.toString)
+    case OrderStorage.OrdersChanged(orders) if orders.contains(orderIdentifier.i.toString) =>
+      val order = orders.get(orderIdentifier.i.toString)
       order.foreach { order =>
         order.status match {
           case OrderStatus.Executed =>
@@ -54,8 +47,10 @@ class OrderHandler(order: Order, client: ActorRef, orderStorage: ActorRef, valid
           // ignore any of these
         }
       }
+  }
 
-
+  override def postStop(): Unit = {
+    context.system.eventStream.unsubscribe(self)
   }
 
 }
