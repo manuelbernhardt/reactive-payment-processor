@@ -3,8 +3,9 @@ package io.bernhardt.reactivepayment
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{CurrentClusterState, MemberUp}
 import akka.remote.testkit.{MultiNodeConfig, MultiNodeSpec}
+import akka.remote.transport.ThrottlerTransportAdapter.Direction
 import com.typesafe.config.ConfigFactory
-import io.bernhardt.reactivepayment.PaymentProcessor.{CreditCardToken, EUR, Order, OrderSucceeded}
+import io.bernhardt.reactivepayment.PaymentProcessor._
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
 
@@ -55,11 +56,35 @@ class ReactivePaymentProcessorMultiNode extends MultiNodeSpec(ReactivePaymentMul
 
     "be able to process a valid order" in within(15.seconds) {
       runOn(node3) {
-        val order = Order(PaymentProcessor.MerchantAccountA, CreditCardToken("token"), BigDecimal(10.00), EUR, "Test node 1")
+        val order = Order(PaymentProcessor.MerchantAccountA, CreditCardToken("token"), BigDecimal(10.00), EUR, "Test node 3")
         processor.get.processPayment(order).futureValue mustBe an[OrderSucceeded]
       }
 
       enterBarrier("order-processed")
+    }
+
+    "do not process an invalid order" in within(15.seconds) {
+      runOn(node3) {
+        val order = Order(PaymentProcessor.MerchantAccountA, CreditCardToken("token"), BigDecimal(-10.00), EUR, "Test node 3")
+        processor.get.processPayment(order).futureValue mustBe an[OrderFailed]
+      }
+
+      enterBarrier("order-rejected")
+    }
+
+    "be able to process an order even when a node fails" in within(15.seconds) {
+      testConductor.blackhole(node3, node1, Direction.Both).futureValue
+
+      runOn(node3) {
+        // run this with MerchantAccountB which should work for node2
+        val order = Order(PaymentProcessor.MerchantAccountB, CreditCardToken("token"), BigDecimal(10.00), EUR, "Test node 3")
+        processor.get.processPayment(order).futureValue mustBe an[OrderSucceeded]
+      }
+
+      testConductor.passThrough(node1, node3, Direction.Both).futureValue
+
+      enterBarrier("order-succeeded-with-down-node")
+
     }
   }
 }
@@ -69,6 +94,8 @@ object ReactivePaymentMultiNodeConfig extends MultiNodeConfig {
   val node1 = role("node1")
   val node2 = role("node2")
   val node3 = role("node3")
+
+  testTransport(on = true)
 
   nodeConfig(node1)(ConfigFactory.parseString(
     """

@@ -132,10 +132,14 @@ case class OrderStatus(name: String)(_predecessors: => Set[OrderStatus], _succes
   override def merge(that: OrderStatus): OrderStatus = {
     val ValidationConflict = Set(Validated, Rejected)
     val ExecutionConflict = Set(Executed, Failed)
+    val RejectedExecutedConflict = Set(Rejected, Executed)
+    val RejectedFailedConflict = Set(Rejected, Failed)
 
     Set(this, that) match {
       case ValidationConflict => Validated
       case ExecutionConflict => Executed
+      case RejectedExecutedConflict => Executed
+      case RejectedFailedConflict => Failed
       case _ => mergeStatus(this, that)
     }
 
