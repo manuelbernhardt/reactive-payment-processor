@@ -1,0 +1,11 @@
+<component name="libraryTable">
+  <library name="SBT: org.lmdbjava:lmdbjava:0.6.0:jar">
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.ivy2/cache/org.lmdbjava/lmdbjava/jars/lmdbjava-0.6.0.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.ivy2/cache/org.lmdbjava/lmdbjava/srcs/lmdbjava-0.6.0-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>
