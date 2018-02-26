@@ -4,7 +4,7 @@ lib_managed/
 src_managed/
 project/boot/
 project/plugins/project/
-.idea
+**/.idea
 .history
 .cache
 .lib/
