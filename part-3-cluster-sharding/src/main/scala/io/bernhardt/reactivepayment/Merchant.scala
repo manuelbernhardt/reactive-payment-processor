@@ -1,9 +1,11 @@
 package io.bernhardt.reactivepayment
 
-import akka.actor.{ActorLogging, ActorRef, ActorSystem, Props}
+import akka.actor.{ActorLogging, ActorRef, ActorSystem, Props, ReceiveTimeout}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import akka.persistence.{AtLeastOnceDelivery, PersistentActor}
 import io.bernhardt.reactivepayment.PaymentProcessor.{BankIdentifier, Order, OrderIdentifier}
+
+import scala.concurrent.duration._
 
 class Merchant(validator: ActorRef, executor: ActorRef) extends PersistentActor with AtLeastOnceDelivery with ActorLogging {
 
@@ -13,6 +15,8 @@ class Merchant(validator: ActorRef, executor: ActorRef) extends PersistentActor 
 
   var orderClients = Map.empty[OrderIdentifier, ActorRef]
   var orders = Map.empty[OrderIdentifier, StoredOrder]
+
+  context.setReceiveTimeout(1.hour)
 
   override def receiveCommand: Receive = {
     case ProcessNewOrder(order) =>
@@ -33,6 +37,10 @@ class Merchant(validator: ActorRef, executor: ActorRef) extends PersistentActor 
     case ProcessOrderFailed(id, _) =>
       log.info("Order {} failed", id)
       persist(OrderFailed(id))(handleEvent)
+    case ReceiveTimeout =>
+      context.parent ! ShardRegion.Passivate
+    case ShardRegion.Passivate =>
+      context.stop(self)
   }
 
   override def receiveRecover: Receive = {
@@ -127,9 +135,9 @@ object Merchant {
 
   // ~~~ cluster sharding
 
-  val NumberOfShards = 100
+  val MaximumNumberOfShards = 100
 
-  case class MerchantEntityEnvelope(id: String, payload: MerchantCommand)
+  // TODO use the methods that are available in akka for this
 
   // extract the ID of the entity, which is simply the (globally unique) merchant account ID
   val extractEntityId: ShardRegion.ExtractEntityId = {
@@ -138,10 +146,19 @@ object Merchant {
 
   // compute the shard ID for an entity
   // we take a simple ring-based approach, based on the number of shards
-  // for this to work a rule of thumb is to have about 10 times more shards than nodes
+  // for this to work a rule of thumb is to have about 10 times more shards than the maximum planned amount of nodes
   val extractShardId: ShardRegion.ExtractShardId = {
-    case m: MerchantCommand => (math.abs(m.order.account.hashCode()) % NumberOfShards).toString
+
+    def computeShardId(entityId: ShardRegion.EntityId): ShardRegion.ShardId =
+      (math.abs(entityId.hashCode()) % MaximumNumberOfShards).toString
+
+    {
+      case m: MerchantCommand => computeShardId(m.order.account.toString)
+      case ShardRegion.StartEntity(id) => computeShardId(id)
+    }
+
   }
+
 
   def startMerchantSharding(system: ActorSystem, validator: ActorRef, executor: ActorRef): ActorRef = {
     ClusterSharding(system).start(

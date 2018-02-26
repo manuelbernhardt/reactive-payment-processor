@@ -1,7 +1,6 @@
 <component name="libraryTable">
   <library name="SBT: org.scala-lang:scala-library:2.12.2:jar" type="Scala">
     <properties>
-      <option name="languageLevel" value="Scala_2_12" />
       <compiler-classpath>
         <root url="file://$USER_HOME$/.ivy2/cache/jline/jline/jars/jline-2.14.3.jar" />
         <root url="file://$USER_HOME$/.ivy2/cache/org.scala-lang.modules/scala-xml_2.12/bundles/scala-xml_2.12-1.0.6.jar" />
