@@ -4,6 +4,7 @@ This is an example application demonstrating the features of Akka Cluster. It is
 
 - https://manuel.bernhardt.io/2018/01/03/tour-akka-cluster-akka-distributed-data/
 - https://manuel.bernhardt.io/2018/01/31/tour-akka-cluster-eventual-consistency-persistent-actors-message-delivery-semantics/
+- https://manuel.bernhardt.io/2018/02/26/tour-akka-cluster-cluster-sharding/
 
 ## Running the tests
 
