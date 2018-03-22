@@ -13,7 +13,9 @@ lazy val root = (project in file("."))
   .configs(MultiJvm)
   .settings(multiJvmSettings: _*)
   .settings(
-   parallelExecution in Test := false
+    parallelExecution in Test := false,
+    logLevel := Level.Debug,
+    multiNodeHosts in MultiJvm := Seq("pi@S1.local", "pi@S2.local", "pi@S3.local")
   )
 
 libraryDependencies ++= Seq(
@@ -26,5 +28,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion,
   "org.scalatest" %% "scalatest" % "3.0.1" % "test",
   "org.iq80.leveldb"            % "leveldb"          % "0.7",
-  "org.fusesource.leveldbjni"   % "leveldbjni-all"   % "1.8"
+  "org.fusesource.leveldbjni"   % "leveldbjni-all"   % "1.8",
+  "com.github.scullxbones" %% "akka-persistence-mongo-casbah" % "2.0.7",
+  "org.mongodb" %% "casbah" % "3.1.1"
 )

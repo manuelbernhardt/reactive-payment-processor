@@ -18,7 +18,7 @@ class ReactivePaymentMultiJvmNode2 extends ReactivePaymentProcessorMultiNode
 
 class ReactivePaymentMultiJvmNode3 extends ReactivePaymentProcessorMultiNode
 
-class ReactivePaymentProcessorMultiNode extends MultiNodeSpec(ReactivePaymentMultiNodeConfig) with ScalaTestMultiNodeSpec with ScalaFutures {
+class ReactivePaymentProcessorMultiNode extends MultiNodeSpec(ReactivePaymentMultiNodeMongoDBConfig) with ScalaTestMultiNodeSpec with ScalaFutures {
 
   override implicit val patienceConfig = PatienceConfig(scaled(Span(15, Seconds)))
 
@@ -126,5 +126,41 @@ object ReactivePaymentMultiNodeConfig extends MultiNodeConfig {
       |akka.coordinated-shutdown.terminate-actor-system = off
       |akka.cluster.run-coordinated-shutdown-when-down = off
       |akka.persistence.journal.plugin = "akka.persistence.journal.leveldb"
+    """.stripMargin))
+}
+
+object ReactivePaymentMultiNodeMongoDBConfig extends MultiNodeConfig {
+  val node1 = role("node1")
+  val node2 = role("node2")
+  val node3 = role("node3")
+
+  testTransport(on = true)
+
+  nodeConfig(node1)(ConfigFactory.parseString(
+    """
+      |akka.cluster.roles=[bank-A]
+    """.stripMargin))
+
+  nodeConfig(node2)(ConfigFactory.parseString(
+    """
+      |akka.cluster.roles=[bank-B]
+    """.stripMargin))
+
+    nodeConfig(node3)(ConfigFactory.parseString(
+    """
+      |akka.cluster.roles=[bank-C]
+    """.stripMargin))
+
+
+  commonConfig(ConfigFactory.parseString(
+    """
+      |akka.loglevel=INFO
+      |akka.actor.provider = cluster
+      |akka.remote.artery.enabled = on
+      |akka.coordinated-shutdown.run-by-jvm-shutdown-hook = off
+      |akka.coordinated-shutdown.terminate-actor-system = off
+      |akka.cluster.run-coordinated-shutdown-when-down = off
+      |akka.persistence.journal.plugin = "akka-contrib-mongodb-persistence-journal"
+      |akka.contrib.persistence.mongodb.mongo.mongouri = "mongodb://localhost:27017"
     """.stripMargin))
 }
